@@ -17,7 +17,7 @@
 #define sdCsSelect() (PORTB&=~(1<<PB4))
 uint8_t secPerCls;
 union uniUint16_t apuPc;
-uint8_t apu00,apu01,apuA,apuX,apuY,apuPsw,apuSp,apuInitCode[0x16+12];
+uint8_t apu00,apu01,apuA,apuX,apuY,apuPsw,apuSp,apuInitCode[64];
 uint16_t playTime;
 
 union uniUint32_t{
@@ -120,7 +120,9 @@ void sdInit(void)
 	//arg.bytes[2] = 0x00;
 	for(c=0;c<250;c++)
 	{
+		arg.bytes[3] = 0;
 		sdCmdSend(55);
+		_delay_ms(1);
 		arg.bytes[3] = 0x40;
 		if(sdCmdSend(41)==0)break;
 	}
@@ -442,11 +444,26 @@ void makeInitCode(void)
 	*pt++ = 0x8d;//22 mov y,#
 	*pt++ = apuY;
 
-	*pt++ = 0x8f;//24 mov [f2],6c
+	*pt++ = 0xe4;//24
+	*pt++ = 0xfd;
+	*pt++ = 0xe4;
+	*pt++ = 0xfe;
+	*pt++ = 0xe4;
+	*pt++ = 0xff;
+
+	*pt++ = 0x8f;//30 mov [f2],6c
 	*pt++ = 0x6c;
 	*pt++ = 0xf2;
 
-	*pt++ = 0x8f;//27 mov [f3],#
+	*pt++ = 0x8f;//33 mov [f3],#
+	pt++;
+	*pt++ = 0xf3;
+
+	*pt++ = 0x8f;//36 mov [f2],4c
+	*pt++ = 0x4c;
+	*pt++ = 0xf2;
+
+	*pt++ = 0x8f;//39 mov [f3],#
 	pt++;
 	*pt++ = 0xf3;
 
@@ -468,16 +485,14 @@ void apuInitDsp(void)
 		c = sdReadOneByteFromMultiBlock();
 		if(i==0x6c)
 		{
-			apuInitCode[28] = c;
+			apuInitCode[34] = c;
 		}
 		else if(i==0x4c)
 		{
-			apu4c = c;
+			apuInitCode[40] = c;
 		}
-		else /*if(i!=0x4c)*/
+		else if(i!=0x5c)
 		{
-			if(i==0x5c)
-				c = 0xff;
 			apuInitCode[0] = i;
 			apuInitCode[1] = c;
 			apuCopyBlock(1,0x00f2,2);
@@ -514,7 +529,7 @@ int main(void)
 	
 	EEAR = 0;
 	EECR |= (1<<EERE);
-	trackNum = 1;//EEDR;
+	trackNum = EEDR;
 	while(1){
 		apuReset();
 		sdInit();
@@ -522,9 +537,9 @@ int main(void)
 		if(fat16FirstSearchFile(trackNum)==1){
 			sdInitReadMultiBlock();
 
-			apuInitCode[0] = 0x6c;
-			apuInitCode[1] = 0x60;
-			apuCopyBlock(1,0x00f2,2);
+			//apuInitCode[0] = 0x6c;
+			//apuInitCode[1] = 0x60;
+			//apuCopyBlock(1,0x00f2,2);
 	
 			sdSkipNByteFromMultiBlock(0x8000);
 			sdSkipNByteFromMultiBlock(0x8100);
@@ -543,23 +558,26 @@ int main(void)
 			apuPort[2] = sdReadOneByteFromMultiBlock();
 			apuPort[3] = sdReadOneByteFromMultiBlock();
 			sdSkipNByteFromMultiBlock(2);
+			/*
 			apuTimer[0] = sdReadOneByteFromMultiBlock();
 			apuTimer[1] = sdReadOneByteFromMultiBlock();
 			apuTimer[2] = sdReadOneByteFromMultiBlock();
+			*/
+			apuCopyBlock(0,0x00fa,0xffc0-0xfa);
+			apuCopyBlock(1,0xff70,sizeof(apuInitCode));
 			
-			apuCopyBlock(0,0x00fd,0xffc0-0xfd);
-			apuCopyBlock(1,0xff70,0x0016+12);
-			
-			apuInitCode[0] = apuTimer[0];
-			apuInitCode[1] = apuTimer[1];
-			apuInitCode[2] = apuTimer[2];
-			apuCopyBlock(1,0x00fa,3);
+			//apuInitCode[0] = apuTimer[0];
+			//apuInitCode[1] = apuTimer[1];
+			//apuInitCode[2] = apuTimer[2];
+			//apuCopyBlock(1,0x00fa,3);
+			/*
 			apuInitCode[0] = 0x6c;
 			apuInitCode[1] = apuInitCode[28];
 			apuCopyBlock(1,0x00f2,2);
 			apuInitCode[0] = 0x4c;
 			apuInitCode[1] = apu4c;
 			apuCopyBlock(1,0x00f2,2);
+			*/
 			//_delay_ms(300);
 			
 			apuExec();
